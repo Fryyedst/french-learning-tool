@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#eaf5ff" />
+    <title>法语单词四选一</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body data-screen="start">
+    <div class="background-orb background-orb--one" aria-hidden="true"></div>
+    <div class="background-orb background-orb--two" aria-hidden="true"></div>
+
+    <main class="app-shell">
+      <header class="topbar">
+        <a class="brand" href="#" aria-label="返回首页">
+          <span class="brand__mark">FR</span>
+          <span class="brand__name">法语单词练习</span>
+        </a>
+        <span class="level-badge">A2–B2 · 10,000 词</span>
+      </header>
+
+      <section class="app-card" aria-live="polite">
+        <div id="screen-start" class="screen screen--active">
+          <div class="start-hero">
+            <p class="home-word">bonjour</p>
+            <button id="start-button" class="primary-button" type="button">
+              开始练习
+              <span aria-hidden="true">→</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="screen-quiz" class="screen" hidden>
+          <div class="quiz-header">
+            <div>
+              <p class="question-count">
+                第 <strong id="current-number">1</strong> / <span id="total-number">20</span> 题
+              </p>
+              <div class="score-row">
+                <span id="score-text" class="score-text">已答对 0 题</span>
+                <span id="retry-badge" class="retry-badge" hidden>错题重练 · 不计分</span>
+              </div>
+            </div>
+            <span id="correct-mark" class="correct-mark" hidden>正确</span>
+          </div>
+
+          <div class="progress-track" aria-hidden="true">
+            <div id="progress-bar" class="progress-bar"></div>
+          </div>
+
+          <div class="question-area">
+            <p id="question-label" class="question-label">它的中文意思是？</p>
+            <h2 id="french-word" class="french-word">bonjour</h2>
+            <button id="speak-button" class="speak-button" type="button" aria-label="播放当前法语单词的发音">
+              <svg class="speak-button__icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z"></path>
+                <path d="M16 8.5a4.5 4.5 0 0 1 0 7"></path>
+                <path d="M18.5 6a8 8 0 0 1 0 12"></path>
+              </svg>
+              <span>播放发音</span>
+            </button>
+            <p id="speech-status" class="speech-status" aria-live="polite"></p>
+          </div>
+
+          <div id="options" class="options" role="group" aria-label="答案选项"></div>
+
+          <div id="feedback" class="feedback" aria-live="assertive"></div>
+
+          <button id="next-button" class="primary-button next-button" type="button" hidden>
+            下一题
+            <span aria-hidden="true">→</span>
+          </button>
+        </div>
+
+        <div id="screen-result" class="screen" hidden>
+          <div class="result-content">
+            <span class="eyebrow">练习完成</span>
+            <h1>这一轮结束啦</h1>
+            <div class="score-circle">
+              <strong id="result-score">0</strong>
+              <span>/ 20</span>
+            </div>
+            <p id="result-message" class="result-message"></p>
+            <p id="result-summary" class="result-summary"></p>
+            <div class="result-actions">
+              <button id="restart-button" class="primary-button" type="button">
+                再练一轮
+                <span aria-hidden="true">↻</span>
+              </button>
+              <button id="home-button" class="secondary-button" type="button">
+                返回首页
+                <span aria-hidden="true">⌂</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="footer-note">每轮 20 题 · 从 10,000 个 A2–B2 常用词汇中随机抽取</footer>
+    </main>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
