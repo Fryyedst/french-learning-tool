@@ -1,15 +1,20 @@
 const DAILY_NEW_COUNT = 10;
+const ROUNDS_PER_WORD = 3;
 const OPTION_COUNT = 4;
-const STORAGE_KEY = "french-vocab-progress-v3";
-const STORAGE_VERSION = 3;
+const STORAGE_KEY = "french-vocab-progress-v4";
+const STORAGE_VERSION = 4;
 const ACCENTS = ["é", "è", "ê", "à", "ç", "ô", "û", "î", "œ", "ù", "â", "ï", "ë", "ü"];
 
 const screenStart = document.querySelector("#screen-start");
 const screenQuiz = document.querySelector("#screen-quiz");
 const screenResult = document.querySelector("#screen-result");
 const screenEmpty = document.querySelector("#screen-empty");
+const screenHistory = document.querySelector("#screen-history");
 const learnButton = document.querySelector("#learn-button");
 const reviewButton = document.querySelector("#review-button");
+const historyButton = document.querySelector("#history-button");
+const historyHomeButton = document.querySelector("#history-home-button");
+const historyList = document.querySelector("#history-list");
 const homeStatus = document.querySelector("#home-status");
 const dailySentenceFr = document.querySelector("#daily-sentence-fr");
 const dailySentenceZh = document.querySelector("#daily-sentence-zh");
@@ -23,10 +28,13 @@ const progressBar = document.querySelector("#progress-bar");
 const scoreText = document.querySelector("#score-text");
 const stageBadge = document.querySelector("#stage-badge");
 const correctMark = document.querySelector("#correct-mark");
+const wordDots = document.querySelector("#word-dots");
 const choicePrompt = document.querySelector("#choice-prompt");
+const sentencePrompt = document.querySelector("#sentence-prompt");
 const fillPrompt = document.querySelector("#fill-prompt");
 const questionArea = document.querySelector(".question-area");
 const frenchWord = document.querySelector("#french-word");
+const sentenceFr = document.querySelector("#sentence-fr");
 const fillChinese = document.querySelector("#fill-chinese");
 const blankedWord = document.querySelector("#blanked-word");
 const fillForm = document.querySelector("#fill-form");
@@ -43,7 +51,6 @@ const resultMessage = document.querySelector("#result-message");
 const resultSummary = document.querySelector("#result-summary");
 const emptyTitle = document.querySelector("#screen-empty h1");
 const emptyMessage = document.querySelector("#empty-message");
-const brand = document.querySelector(".brand");
 
 const wordByFrench = new Map(WORDS.map((word) => [word.french, word]));
 const poolsByLevelAndPos = new Map();
@@ -57,19 +64,14 @@ for (const word of WORDS) {
 let store = loadStore();
 let activeSession = null;
 let currentWord = null;
+let currentTask = null;
 let currentOptions = [];
-let currentBlankedWord = "";
 let answered = false;
 let frenchVoice = null;
 let speechVersion = 0;
 
 function createDefaultStore() {
-  return {
-    version: STORAGE_VERSION,
-    seenWords: [],
-    days: {},
-    reviews: {}
-  };
+  return { version: STORAGE_VERSION, seenWords: [], days: {}, reviews: {}, history: [] };
 }
 
 function loadStore() {
@@ -124,30 +126,18 @@ function isSpeechSupported() {
 }
 
 function updateFrenchVoice() {
-  if (!isSpeechSupported()) {
-    frenchVoice = null;
-    return;
-  }
-
-  const frenchVoices = window.speechSynthesis
-    .getVoices()
-    .filter((voice) => voice.lang.toLowerCase().startsWith("fr"));
-
-  frenchVoice =
-    frenchVoices.find((voice) => voice.lang.toLowerCase() === "fr-fr") ||
-    frenchVoices[0] ||
-    null;
+  if (!isSpeechSupported()) return;
+  const voices = window.speechSynthesis.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith("fr"));
+  frenchVoice = voices.find((voice) => voice.lang.toLowerCase() === "fr-fr") || voices[0] || null;
 }
 
-function speakCurrentWord() {
-  if (!currentWord || !isSpeechSupported()) return;
-
+function speakText(text) {
+  if (!text || !isSpeechSupported()) return;
   window.speechSynthesis.cancel();
   const version = ++speechVersion;
-  const utterance = new SpeechSynthesisUtterance(currentWord.french);
+  const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "fr-FR";
   utterance.rate = 0.82;
-
   if (frenchVoice) utterance.voice = frenchVoice;
   utterance.onend = () => {
     if (version === speechVersion) speechStatus.textContent = "";
@@ -155,7 +145,6 @@ function speakCurrentWord() {
   utterance.onerror = () => {
     if (version === speechVersion) speechStatus.textContent = "暂时无法播放，请检查系统语音设置";
   };
-
   speechStatus.textContent = "正在播放法语发音";
   window.speechSynthesis.speak(utterance);
 }
@@ -167,7 +156,7 @@ function stopSpeech() {
 }
 
 function showScreen(screen, name) {
-  [screenStart, screenQuiz, screenResult, screenEmpty].forEach((item) => {
+  [screenStart, screenQuiz, screenResult, screenEmpty, screenHistory].forEach((item) => {
     item.hidden = true;
     item.classList.remove("screen--active");
   });
@@ -176,20 +165,45 @@ function showScreen(screen, name) {
   screen.classList.add("screen--active");
 }
 
-function sessionWords(session) {
+function sessionWordObjects(session) {
   return session.words.map((wordId) => wordByFrench.get(wordId)).filter(Boolean);
 }
 
-function openSession(type, sessionData) {
-  activeSession = { type, data: sessionData };
+function getProgress(session, wordId) {
+  return session.progress?.[wordId] || 0;
+}
+
+function renderDots(value) {
+  [...wordDots.children].forEach((dot, index) => {
+    dot.classList.toggle("dot--on", index < value);
+  });
+}
+
+function createSession(type, words, sourceDate = null) {
+  return {
+    id: `${type}-${dateKey()}-${Date.now()}`,
+    type,
+    sourceDate,
+    words,
+    progress: Object.fromEntries(words.map((wordId) => [wordId, 0])),
+    successfulTasks: 0,
+    current: null,
+    lastWordId: null,
+    stage: "rounds",
+    fillQueue: [],
+    historyAdded: false,
+    createdAt: new Date().toISOString()
+  };
+}
+
+function openSession(session) {
+  activeSession = session;
   answered = false;
   currentOptions = [];
-
-  if (sessionData.stage === "done") {
+  if (session.stage === "done") {
     showSessionResult();
     return;
   }
-
   showScreen(screenQuiz, "quiz");
   renderQuestion();
 }
@@ -201,32 +215,23 @@ function startLearnSession() {
 
   const incomplete = store.days[today].batches.find((batch) => batch.stage !== "done");
   if (incomplete) {
-    openSession("learn", incomplete);
+    openSession(incomplete);
     return;
   }
 
   const seen = new Set(store.seenWords);
   const available = WORDS.filter((word) => !seen.has(word.french));
-  if (available.length === 0) {
+  if (!available.length) {
     showEmpty("新词已全部学完", "3,000 个 B2 单词都已经学习过了。");
     return;
   }
 
   const words = shuffle(available).slice(0, DAILY_NEW_COUNT).map((word) => word.french);
-  const batch = {
-    id: `${today}-${Date.now()}`,
-    words,
-    stage: "choice",
-    choiceQueue: shuffle(words),
-    fillQueue: [],
-    choiceAttempted: [],
-    firstTryCorrect: 0
-  };
-
-  store.days[today].batches.push(batch);
+  const session = createSession("learn", words);
+  store.days[today].batches.push(session);
   store.seenWords.push(...words);
   saveStore();
-  openSession("learn", batch);
+  openSession(session);
 }
 
 function startReviewSession(reset = false) {
@@ -236,35 +241,20 @@ function startReviewSession(reset = false) {
   const existing = store.reviews[today];
 
   if (existing && !reset) {
-    openSession("review", existing);
+    openSession(existing);
     return;
   }
 
-  const words = [
-    ...new Set(
-      (store.days[sourceDate]?.batches || []).flatMap((batch) => batch.words)
-    )
-  ];
-
-  if (words.length === 0) {
+  const words = [...new Set((store.days[sourceDate]?.batches || []).flatMap((batch) => batch.words))];
+  if (!words.length) {
     showEmpty("昨天没有学习单词", "先完成今天的新单词学习，明天就可以在这里复习了。");
     return;
   }
 
-  const review = {
-    id: `review-${today}`,
-    sourceDate,
-    words,
-    stage: "choice",
-    choiceQueue: shuffle(words),
-    fillQueue: [],
-    choiceAttempted: [],
-    firstTryCorrect: 0
-  };
-
-  store.reviews[today] = review;
+  const session = createSession("review", words, sourceDate);
+  store.reviews[today] = session;
   saveStore();
-  openSession("review", review);
+  openSession(session);
 }
 
 function showEmpty(title, message) {
@@ -274,54 +264,117 @@ function showEmpty(title, message) {
   showScreen(screenEmpty, "empty");
 }
 
-function renderQuestion() {
-  const session = activeSession?.data;
-  if (!session) return;
+function chooseNextTask(session) {
+  const eligible = session.words.filter((wordId) => getProgress(session, wordId) < ROUNDS_PER_WORD);
+  if (!eligible.length) return null;
 
-  if (session.stage === "choice") {
-    renderChoiceQuestion();
-  } else if (session.stage === "fill") {
-    renderFillQuestion();
+  const spaced = eligible.filter((wordId) => wordId !== session.lastWordId);
+  const pool = spaced.length ? spaced : eligible;
+  const wordId = pool[Math.floor(Math.random() * pool.length)];
+  return { wordId, stage: getProgress(session, wordId) + 1 };
+}
+
+function ensureCurrentTask(session) {
+  if (
+    session.current &&
+    getProgress(session, session.current.wordId) === session.current.stage - 1
+  ) {
+    return session.current;
+  }
+  session.current = chooseNextTask(session);
+  saveStore();
+  return session.current;
+}
+
+function renderQuestion() {
+  const session = activeSession;
+  if (!session) return;
+  if (session.stage === "rounds") renderRoundQuestion();
+  else if (session.stage === "fill") renderFillQuestion();
+  else showSessionResult();
+}
+
+function choiceDistractors(word) {
+  const selected = [];
+  const usedSenses = new Set([word.sense]);
+  const usedValues = new Set([word.french, word.chinese]);
+
+  const addFromPool = (pool) => {
+    for (const candidate of shuffle(pool || [])) {
+      if (selected.length >= OPTION_COUNT - 1) return;
+      if (usedSenses.has(candidate.sense) || usedValues.has(candidate.french)) continue;
+      selected.push(candidate);
+      usedSenses.add(candidate.sense);
+      usedValues.add(candidate.french);
+    }
+  };
+
+  addFromPool(poolsByLevelAndPos.get(`${word.level}|${word.pos}`));
+  addFromPool(WORDS);
+  return selected.slice(0, OPTION_COUNT - 1);
+}
+
+function blankExample(word) {
+  const sentence = EXAMPLES[word.french] || `Le mot « ${word.french} » apparaît dans cette phrase.`;
+  const pattern = new RegExp(word.french.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+  return sentence.replace(pattern, "_____");
+}
+
+function setRoundPrompt(task, word) {
+  const stage = task.stage;
+  choicePrompt.hidden = false;
+  sentencePrompt.hidden = true;
+  fillPrompt.hidden = true;
+  frenchWord.classList.remove("word--hidden");
+
+  if (stage === 1) {
+    choicePrompt.querySelector(".question-label").textContent = "它的中文意思是？";
+    frenchWord.textContent = word.french;
+    stageBadge.textContent = "第一轮 · 看词选义";
+  } else if (stage === 2) {
+    choicePrompt.querySelector(".question-label").textContent = "听发音，选择正确的中文意思";
+    frenchWord.textContent = "••••••";
+    frenchWord.classList.add("word--hidden");
+    stageBadge.textContent = "第二轮 · 听音选义";
   } else {
-    showSessionResult();
+    choicePrompt.hidden = true;
+    sentencePrompt.hidden = false;
+    sentenceFr.textContent = blankExample(word);
+    stageBadge.textContent = "第三轮 · 句子选词";
   }
 }
 
-function setStageBadge() {
-  const mode = activeSession.type === "learn" ? "学习新词" : "复习单词";
-  stageBadge.textContent = activeSession.data.stage === "fill" ? `${mode} · 拼写` : mode;
-  stageBadge.hidden = false;
-}
-
-function renderChoiceQuestion() {
-  const session = activeSession.data;
-  currentWord = wordByFrench.get(session.choiceQueue[0]);
-  if (!currentWord) {
+function renderRoundQuestion() {
+  const session = activeSession;
+  const task = ensureCurrentTask(session);
+  if (!task) {
     startFillStage();
     return;
   }
 
+  currentTask = task;
+  currentWord = wordByFrench.get(task.wordId);
   answered = false;
   correctMark.hidden = true;
   feedback.textContent = "";
   feedback.className = "feedback";
   speechStatus.textContent = "";
   nextButton.hidden = true;
-  fillForm.hidden = true;
   optionsContainer.hidden = false;
-  choicePrompt.hidden = false;
-  fillPrompt.hidden = true;
-  frenchWord.textContent = currentWord.french;
+  fillForm.hidden = true;
+  fillInput.disabled = false;
+  fillSubmit.disabled = false;
+  fillInput.value = "";
+  renderDots(getProgress(session, currentWord.french));
+  setRoundPrompt(task, currentWord);
 
-  const total = session.words.length;
-  const mastered = total - new Set(session.choiceQueue).size;
-  const retrying = session.choiceAttempted.includes(currentWord.french);
-  questionCount.textContent = retrying ? "四选一 · 错题重练" : `四选一 · 第 ${mastered + 1} / ${total} 题`;
-  scoreText.textContent = `首次答对 ${session.firstTryCorrect} / ${total}`;
-  progressBar.style.width = `${(mastered / total) * 100}%`;
-  setStageBadge();
+  const totalTasks = session.words.length * ROUNDS_PER_WORD;
+  questionCount.textContent = `随机练习 · ${session.successfulTasks + 1} / ${totalTasks}`;
+  scoreText.textContent = detailsForStage(task.stage);
+  progressBar.style.width = `${(session.successfulTasks / totalTasks) * 100}%`;
 
-  currentOptions = shuffle([currentWord, ...chooseDistractors(currentWord)]);
+  const optionValuesAreFrench = task.stage === 3;
+  currentOptions = shuffle([currentWord, ...choiceDistractors(currentWord)]);
   optionsContainer.replaceChildren();
 
   currentOptions.forEach((option, index) => {
@@ -336,107 +389,92 @@ function renderChoiceQuestion() {
 
     const optionCopy = document.createElement("span");
     optionCopy.className = "option-copy";
-    const chinese = document.createElement("span");
-    chinese.className = "option-chinese";
-    chinese.textContent = option.chinese;
-    const translation = document.createElement("span");
-    translation.className = "option-translation";
-    translation.textContent = option.french;
-    translation.setAttribute("aria-hidden", "true");
-    optionCopy.append(chinese, translation);
+    const primary = document.createElement("span");
+    primary.className = "option-primary";
+    primary.textContent = optionValuesAreFrench ? option.french : option.chinese;
+    const reveal = document.createElement("span");
+    reveal.className = "option-translation";
+    reveal.textContent = optionValuesAreFrench ? option.chinese : option.french;
+    reveal.setAttribute("aria-hidden", "true");
+    optionCopy.append(primary, reveal);
     button.append(optionIndex, optionCopy);
-    button.addEventListener("click", () => selectChoiceAnswer(button, index));
+    button.addEventListener("click", () => selectRoundAnswer(button, index));
     optionsContainer.append(button);
   });
 
   requestAnimationFrame(() => questionArea.scrollIntoView({ behavior: "smooth", block: "center" }));
-  speakCurrentWord();
+  speakText(task.stage === 3 ? EXAMPLES[currentWord.french] : currentWord.french);
 }
 
-function chooseDistractors(word) {
-  const selected = [];
-  const usedSenses = new Set([word.sense]);
-  const usedChinese = new Set([word.chinese]);
-
-  const addFromPool = (pool) => {
-    for (const candidate of shuffle(pool || [])) {
-      if (selected.length >= OPTION_COUNT - 1) return;
-      if (
-        candidate.french === word.french ||
-        usedSenses.has(candidate.sense) ||
-        usedChinese.has(candidate.chinese)
-      ) continue;
-      selected.push(candidate);
-      usedSenses.add(candidate.sense);
-      usedChinese.add(candidate.chinese);
-    }
-  };
-
-  addFromPool(poolsByLevelAndPos.get(`${word.level}|${word.pos}`));
-  addFromPool(WORDS);
-  return selected.slice(0, OPTION_COUNT - 1);
+function detailsForStage(stage) {
+  if (stage === 1) return "看词选义 · 正确后点亮第 1 个绿点";
+  if (stage === 2) return "听音选义 · 正确后点亮第 2 个绿点";
+  return "句子选词 · 正确后点亮第 3 个绿点";
 }
 
-function selectChoiceAnswer(selectedButton, selectedIndex) {
+function selectRoundAnswer(selectedButton, selectedIndex) {
   if (answered) return;
   answered = true;
 
-  const session = activeSession.data;
+  const session = activeSession;
   const selectedWord = currentOptions[selectedIndex];
-  const isCorrect = selectedWord.sense === currentWord.sense && selectedWord.chinese === currentWord.chinese;
-  const firstAttempt = !session.choiceAttempted.includes(currentWord.french);
+  const isCorrect = selectedWord.french === currentWord.french;
+  const before = getProgress(session, currentWord.french);
 
-  if (firstAttempt) session.choiceAttempted.push(currentWord.french);
-  if (firstAttempt && isCorrect) session.firstTryCorrect += 1;
-  session.lastChoiceCorrect = isCorrect;
+  if (isCorrect) {
+    session.progress[currentWord.french] = before + 1;
+    session.successfulTasks += 1;
+    renderDots(before + 1);
+  } else {
+    session.progress[currentWord.french] = 0;
+    renderDots(0);
+    session.lastWordId = currentWord.french;
+    session.current = null;
+  }
   saveStore();
 
-  scoreText.textContent = `首次答对 ${session.firstTryCorrect} / ${session.words.length}`;
-  correctMark.hidden = !isCorrect;
-
+  const revealFrench = currentTask.stage === 3 ? currentWord.chinese : currentWord.french;
   optionsContainer.querySelectorAll(".option-button").forEach((button) => {
     const option = currentOptions[Number(button.dataset.optionIndex)];
     button.disabled = true;
     button.querySelector(".option-translation").classList.add("option-translation--visible");
     button.querySelector(".option-translation").setAttribute("aria-hidden", "false");
-    if (option.sense === currentWord.sense && option.chinese === currentWord.chinese) {
-      button.classList.add("option-button--correct");
-    } else if (button === selectedButton) {
-      button.classList.add("option-button--wrong");
-    }
+    if (option.french === currentWord.french) button.classList.add("option-button--correct");
+    else if (button === selectedButton) button.classList.add("option-button--wrong");
   });
 
-  feedback.textContent = isCorrect
-    ? `回答正确！${currentWord.french} 的意思是“${currentWord.chinese}”。`
-    : `回答错误。正确答案是“${currentWord.chinese}”，这道题会稍后再次出现。`;
-  feedback.classList.add(isCorrect ? "feedback--correct" : "feedback--wrong");
+  if (currentTask.stage === 3) sentenceFr.textContent = EXAMPLES[currentWord.french];
 
-  const lastUniqueWord = new Set(session.choiceQueue).size === 1;
-  nextButton.innerHTML = isCorrect && lastUniqueWord
-    ? '进入拼写练习 <span aria-hidden="true">→</span>'
+  feedback.textContent = isCorrect
+    ? `回答正确，第 ${before + 1} 个绿点已点亮。`
+    : `回答错误，三个绿点已清零；这个单词之后会从第一轮重新开始。正确答案是“${revealFrench}”。`;
+  feedback.classList.add(isCorrect ? "feedback--correct" : "feedback--wrong");
+  correctMark.hidden = !isCorrect;
+
+  const allTasksDone = session.successfulTasks === session.words.length * ROUNDS_PER_WORD;
+  nextButton.innerHTML = isCorrect && allTasksDone
+    ? '进入填空练习 <span aria-hidden="true">→</span>'
     : '下一题 <span aria-hidden="true">→</span>';
   nextButton.hidden = false;
   nextButton.focus();
 }
 
-function advanceChoiceQueue() {
-  const session = activeSession.data;
-  const completed = session.choiceQueue.shift();
-  if (!session.lastChoiceCorrect) session.choiceQueue.push(completed);
-  session.lastChoiceCorrect = null;
-  saveStore();
-
-  if (session.choiceQueue.length === 0) {
+function advanceRoundQueue() {
+  const session = activeSession;
+  if (session.successfulTasks === session.words.length * ROUNDS_PER_WORD) {
     startFillStage();
     return;
   }
-
+  session.lastWordId = currentWord.french;
+  session.current = null;
+  saveStore();
   renderQuestion();
 }
 
 function startFillStage() {
-  const session = activeSession.data;
+  const session = activeSession;
   session.stage = "fill";
+  session.current = null;
   session.fillQueue = shuffle(session.words);
   saveStore();
   renderQuestion();
@@ -449,15 +487,11 @@ function createBlankedWord(word) {
     .filter((index) => index >= 0);
   const blankCount = Math.min(3, Math.max(1, Math.ceil(letterIndexes.length / 4)));
   const blankIndexes = new Set(shuffle(letterIndexes).slice(0, blankCount));
-
-  return {
-    display: characters.map((character, index) => blankIndexes.has(index) ? "_" : character).join(""),
-    indexes: blankIndexes
-  };
+  return characters.map((character, index) => blankIndexes.has(index) ? "_" : character).join("");
 }
 
 function renderFillQuestion() {
-  const session = activeSession.data;
+  const session = activeSession;
   currentWord = wordByFrench.get(session.fillQueue[0]);
   if (!currentWord) {
     finishSession();
@@ -471,29 +505,29 @@ function renderFillQuestion() {
   speechStatus.textContent = "";
   nextButton.hidden = true;
   choicePrompt.hidden = true;
+  sentencePrompt.hidden = true;
   fillPrompt.hidden = false;
   optionsContainer.hidden = true;
   fillForm.hidden = false;
   fillInput.disabled = false;
   fillSubmit.disabled = false;
   fillInput.value = "";
-
-  currentBlankedWord = createBlankedWord(currentWord.french);
-  blankedWord.textContent = currentBlankedWord.display;
+  blankedWord.textContent = createBlankedWord(currentWord.french);
   fillChinese.textContent = currentWord.chinese;
+  stageBadge.textContent = "填空练习 · 不影响绿点";
+  renderDots(ROUNDS_PER_WORD);
 
   const total = session.words.length;
   const remaining = session.fillQueue.length;
   questionCount.textContent = `挖字母填空 · 剩余 ${remaining} 个`;
-  scoreText.textContent = `首次答对 ${session.firstTryCorrect} / ${total} · 拼写不计分`;
+  scoreText.textContent = "三个绿点已完成，拼写答错不影响绿点";
   progressBar.style.width = `${((total - remaining) / total) * 100}%`;
-  setStageBadge();
 
   requestAnimationFrame(() => {
     questionArea.scrollIntoView({ behavior: "smooth", block: "center" });
     fillInput.focus({ preventScroll: true });
   });
-  speakCurrentWord();
+  speakText(currentWord.french);
 }
 
 function normalizeTypedWord(value) {
@@ -503,17 +537,13 @@ function normalizeTypedWord(value) {
 function submitFillAnswer() {
   if (answered) return;
   answered = true;
-
-  const session = activeSession.data;
-  const typed = normalizeTypedWord(fillInput.value);
-  const expected = normalizeTypedWord(currentWord.french);
-  const isCorrect = typed === expected;
-
+  const session = activeSession;
+  const isCorrect = normalizeTypedWord(fillInput.value) === normalizeTypedWord(currentWord.french);
+  session.lastFillCorrect = isCorrect;
   fillInput.disabled = true;
   fillSubmit.disabled = true;
   blankedWord.textContent = currentWord.french;
   correctMark.hidden = !isCorrect;
-  session.lastFillCorrect = isCorrect;
   saveStore();
 
   feedback.textContent = isCorrect
@@ -521,8 +551,7 @@ function submitFillAnswer() {
     : `拼写错误。正确写法是“${currentWord.french}”，这道题会稍后再次出现。`;
   feedback.classList.add(isCorrect ? "feedback--correct" : "feedback--wrong");
 
-  const lastWord = session.fillQueue.length === 1;
-  nextButton.innerHTML = isCorrect && lastWord
+  nextButton.innerHTML = isCorrect && session.fillQueue.length === 1
     ? '完成本组 <span aria-hidden="true">→</span>'
     : '下一题 <span aria-hidden="true">→</span>';
   nextButton.hidden = false;
@@ -530,54 +559,109 @@ function submitFillAnswer() {
 }
 
 function advanceFillQueue() {
-  const session = activeSession.data;
+  const session = activeSession;
   const completed = session.fillQueue.shift();
   if (!session.lastFillCorrect) session.fillQueue.push(completed);
   session.lastFillCorrect = null;
   saveStore();
 
-  if (session.fillQueue.length === 0) {
-    finishSession();
-    return;
-  }
-
-  renderQuestion();
+  if (!session.fillQueue.length) finishSession();
+  else renderQuestion();
 }
 
 function finishSession() {
-  const session = activeSession.data;
+  const session = activeSession;
   session.stage = "done";
   session.completedAt = new Date().toISOString();
+  if (!session.historyAdded) addHistoryEntry(session);
   saveStore();
   showSessionResult();
 }
 
+function addHistoryEntry(session) {
+  const wordObjects = sessionWordObjects(session);
+  const groups = [];
+  for (let index = 0; index < wordObjects.length; index += 10) {
+    groups.push(wordObjects.slice(index, index + 10).map((word) => word.french));
+  }
+
+  store.history.unshift({
+    id: session.id,
+    date: dateKey(),
+    type: session.type,
+    completedAt: session.completedAt || new Date().toISOString(),
+    groups
+  });
+  session.historyAdded = true;
+}
+
 function showSessionResult() {
-  const session = activeSession.data;
-  const total = session.words.length;
-  const isLearn = activeSession.type === "learn";
-
-  resultTitle.textContent = isLearn ? "本组学习完成" : "复习完成";
-  resultScore.textContent = String(session.firstTryCorrect);
-  resultTotal.textContent = String(total);
-  resultMessage.textContent = session.firstTryCorrect === total
-    ? "四选一全部一次答对，拼写练习也完成了。"
-    : `四选一首次答对 ${session.firstTryCorrect} 题，错题和拼写经过重练后已完成。`;
-  resultSummary.textContent = isLearn
-    ? `${total} 个新单词已完成四选一和挖字母填空。`
-    : `已复习昨天学习的 ${total} 个单词。`;
-
+  const session = activeSession;
+  resultTitle.textContent = session.type === "learn" ? "本组学习完成" : "复习完成";
+  resultScore.textContent = String(session.words.length);
+  resultTotal.textContent = String(session.words.length);
+  resultMessage.textContent = "所有单词都完成了三轮练习和挖字母填空。";
+  resultSummary.textContent = `${session.words.length} 个单词已记录到历史学习记录。`;
   const hasNewWords = store.seenWords.length < WORDS.length;
-  restartButton.textContent = isLearn ? (hasNewWords ? "再学 10 个" : "新词已学完") : "再复习一遍";
-  restartButton.disabled = isLearn && !hasNewWords;
+  restartButton.textContent = session.type === "learn" ? (hasNewWords ? "再学 10 个" : "新词已学完") : "再复习一遍";
+  restartButton.disabled = session.type === "learn" && !hasNewWords;
   showScreen(screenResult, "result");
+}
+
+function renderHistory() {
+  historyList.replaceChildren();
+  if (!store.history.length) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty";
+    empty.textContent = "还没有完成的学习记录。";
+    historyList.append(empty);
+    showScreen(screenHistory, "history");
+    return;
+  }
+
+  for (const entry of store.history) {
+    const section = document.createElement("section");
+    section.className = "history-entry";
+    const header = document.createElement("div");
+    header.className = "history-entry__header";
+    const date = document.createElement("strong");
+    date.textContent = entry.date;
+    const type = document.createElement("span");
+    type.className = "history-type";
+    type.textContent = entry.type === "learn" ? "学习新词" : "复习单词";
+    header.append(date, type);
+
+    const list = document.createElement("div");
+    list.className = "history-groups";
+    entry.groups.forEach((group, groupIndex) => {
+      const groupBlock = document.createElement("div");
+      groupBlock.className = "history-group";
+      const title = document.createElement("p");
+      title.textContent = `第 ${groupIndex + 1} 组 · ${group.length} 个单词`;
+      const words = document.createElement("div");
+      words.className = "history-words";
+      for (const wordId of group) {
+        const word = wordByFrench.get(wordId);
+        if (!word) continue;
+        const row = document.createElement("p");
+        row.textContent = `${word.french} — ${word.chinese}`;
+        words.append(row);
+      }
+      groupBlock.append(title, words);
+      list.append(groupBlock);
+    });
+
+    section.append(header, list);
+    historyList.append(section);
+  }
+
+  showScreen(screenHistory, "history");
 }
 
 function renderHome() {
   const sentence = sentenceForDate();
   dailySentenceFr.textContent = sentence.fr;
   dailySentenceZh.textContent = sentence.zh;
-
   const today = dateKey();
   const hasIncomplete = (store.days[today]?.batches || []).some((batch) => batch.stage !== "done");
   const hasNewWords = store.seenWords.length < WORDS.length;
@@ -595,7 +679,6 @@ function renderHome() {
     learnButton.textContent = "新词已学完";
     homeStatus.textContent = "3,000 个 B2 单词都已经学习过了。";
   }
-
   showScreen(screenStart, "start");
 }
 
@@ -603,6 +686,7 @@ function returnHome() {
   stopSpeech();
   activeSession = null;
   currentWord = null;
+  currentTask = null;
   currentOptions = [];
   answered = false;
   renderHome();
@@ -626,6 +710,8 @@ ACCENTS.forEach((accent) => {
 
 learnButton.addEventListener("click", startLearnSession);
 reviewButton.addEventListener("click", () => startReviewSession(false));
+historyButton.addEventListener("click", renderHistory);
+historyHomeButton.addEventListener("click", returnHome);
 restartButton.addEventListener("click", () => {
   if (activeSession?.type === "review") startReviewSession(true);
   else startLearnSession();
@@ -633,15 +719,18 @@ restartButton.addEventListener("click", () => {
 homeButton.addEventListener("click", returnHome);
 emptyHomeButton.addEventListener("click", returnHome);
 nextButton.addEventListener("click", () => {
-  if (activeSession?.data.stage === "choice") advanceChoiceQueue();
+  if (activeSession?.stage === "rounds") advanceRoundQueue();
   else advanceFillQueue();
 });
 fillForm.addEventListener("submit", (event) => {
   event.preventDefault();
   submitFillAnswer();
 });
-speakButton.addEventListener("click", speakCurrentWord);
-brand.addEventListener("click", (event) => {
+speakButton.addEventListener("click", () => {
+  if (activeSession?.stage === "rounds" && currentTask?.stage === 3) speakText(EXAMPLES[currentWord.french]);
+  else speakText(currentWord?.french);
+});
+document.querySelector(".brand").addEventListener("click", (event) => {
   event.preventDefault();
   returnHome();
 });
