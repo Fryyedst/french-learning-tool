@@ -806,3 +806,205 @@ body[data-screen="start"] .start-hero {
     width: 100%;
   }
 }
+/* v3: daily home and fill-in practice */
+body[data-screen="start"] .screen {
+  place-items: stretch;
+}
+
+.start-hero {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  max-width: 760px;
+  margin: 0 auto;
+  grid-template-rows: auto 1fr auto;
+  align-items: center;
+}
+
+.home-word {
+  justify-self: center;
+  margin: 4px 0 24px;
+  color: #4a9fe1;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.daily-sentence-card {
+  width: min(100%, 680px);
+  margin: 0 auto;
+  padding: 38px 34px;
+  border: 1px solid rgba(157, 206, 242, 0.5);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 18px 44px rgba(41, 105, 153, 0.09);
+  text-align: center;
+}
+
+.daily-sentence-fr {
+  margin-bottom: 20px;
+  color: #173e5d;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(1.55rem, 4.2vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.42;
+}
+
+.daily-sentence-zh {
+  margin-bottom: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+
+.home-status {
+  min-height: 22px;
+  margin: 18px 0 0;
+  color: var(--blue-700);
+  font-size: 0.83rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.home-actions {
+  display: grid;
+  width: min(100%, 680px);
+  margin: 0 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-self: end;
+}
+
+.home-actions .primary-button,
+.home-actions .secondary-button {
+  width: 100%;
+}
+
+.fill-chinese {
+  margin-bottom: 14px;
+  color: var(--ink);
+  font-size: 1.45rem;
+  font-weight: 750;
+}
+
+.blanked-word {
+  margin-bottom: 0;
+  color: #24679f;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(2.4rem, 8vw, 4rem);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.fill-form {
+  display: grid;
+  max-width: 620px;
+  margin: 0 auto;
+  gap: 12px;
+}
+
+.options[hidden],\n.fill-form[hidden],
+#choice-prompt[hidden],
+#fill-prompt[hidden] {
+  display: none;
+}
+
+.fill-form label {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.fill-input {
+  width: 100%;
+  min-height: 58px;
+  padding: 13px 16px;
+  border: 1px solid var(--blue-200);
+  border-radius: 16px;
+  color: var(--ink);
+  background: #fbfdff;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1.3rem;
+  text-align: center;
+}
+
+.fill-input:focus {
+  border-color: var(--blue-500);
+  outline: 3px solid rgba(75, 159, 225, 0.18);
+}
+
+.fill-input:disabled {
+  color: var(--muted);
+  background: #f4f8fb;
+}
+
+.accent-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.accent-button {
+  min-width: 40px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--blue-200);
+  border-radius: 12px;
+  color: var(--blue-700);
+  background: var(--blue-50);
+  cursor: pointer;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+}
+
+.accent-button:hover {
+  background: var(--blue-100);
+}
+
+.fill-form .primary-button {
+  width: min(240px, 100%);
+  margin: 4px auto 0;
+}
+
+@media (max-width: 680px) {
+  body[data-screen="start"] .app-shell {
+    width: calc(100% - 24px);
+  }
+
+  .start-hero {
+    min-height: calc(100dvh - 36px);
+    grid-template-rows: auto 1fr auto;
+  }
+
+  .home-word {
+    margin: 2px 0 14px;
+    font-size: 1.15rem;
+  }
+
+  .daily-sentence-card {
+    padding: 28px 20px;
+    border-radius: 22px;
+  }
+
+  .daily-sentence-fr {
+    font-size: 1.48rem;
+  }
+
+  .daily-sentence-zh {
+    font-size: 0.92rem;
+  }
+
+  .home-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .blanked-word {
+    font-size: clamp(2.1rem, 13vw, 3.3rem);
+  }
+}

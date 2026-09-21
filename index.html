@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#eaf5ff" />
-    <title>法语单词四选一</title>
+    <title>法语每日单词</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body data-screen="start">
@@ -15,31 +15,43 @@
       <header class="topbar">
         <a class="brand" href="#" aria-label="返回首页">
           <span class="brand__mark">FR</span>
-          <span class="brand__name">法语单词练习</span>
+          <span class="brand__name">法语每日单词</span>
         </a>
-        <span class="level-badge">A2–B2 · 10,000 词</span>
+        <span class="level-badge">B2 · 3,000 词</span>
       </header>
 
       <section class="app-card" aria-live="polite">
         <div id="screen-start" class="screen screen--active">
           <div class="start-hero">
             <p class="home-word">bonjour</p>
-            <button id="start-button" class="primary-button" type="button">
-              开始练习
-              <span aria-hidden="true">→</span>
-            </button>
+
+            <section class="daily-sentence-card" aria-label="今日法语短句">
+              <p id="daily-sentence-fr" class="daily-sentence-fr"></p>
+              <p id="daily-sentence-zh" class="daily-sentence-zh"></p>
+            </section>
+
+            <p id="home-status" class="home-status" aria-live="polite"></p>
+
+            <div class="home-actions">
+              <button id="learn-button" class="primary-button" type="button">
+                学习新单词
+                <span aria-hidden="true">＋</span>
+              </button>
+              <button id="review-button" class="secondary-button" type="button">
+                复习单词
+                <span aria-hidden="true">↻</span>
+              </button>
+            </div>
           </div>
         </div>
 
         <div id="screen-quiz" class="screen" hidden>
           <div class="quiz-header">
             <div>
-              <p class="question-count">
-                第 <strong id="current-number">1</strong> / <span id="total-number">20</span> 题
-              </p>
+              <p id="question-count" class="question-count">四选一 · 第 1 / 10 题</p>
               <div class="score-row">
-                <span id="score-text" class="score-text">已答对 0 题</span>
-                <span id="retry-badge" class="retry-badge" hidden>错题重练 · 不计分</span>
+                <span id="score-text" class="score-text">首次答对 0 / 10</span>
+                <span id="stage-badge" class="retry-badge">学习新词</span>
               </div>
             </div>
             <span id="correct-mark" class="correct-mark" hidden>正确</span>
@@ -50,8 +62,17 @@
           </div>
 
           <div class="question-area">
-            <p id="question-label" class="question-label">它的中文意思是？</p>
-            <h2 id="french-word" class="french-word">bonjour</h2>
+            <div id="choice-prompt">
+              <p class="question-label">它的中文意思是？</p>
+              <h2 id="french-word" class="french-word">bonjour</h2>
+            </div>
+
+            <div id="fill-prompt" hidden>
+              <p class="question-label">根据中文意思填写完整法语单词</p>
+              <p id="fill-chinese" class="fill-chinese"></p>
+              <p id="blanked-word" class="blanked-word"></p>
+            </div>
+
             <button id="speak-button" class="speak-button" type="button" aria-label="播放当前法语单词的发音">
               <svg class="speak-button__icon" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M4 9v6h4l5 4V5L8 9H4Z"></path>
@@ -65,28 +86,45 @@
 
           <div id="options" class="options" role="group" aria-label="答案选项"></div>
 
+          <form id="fill-form" class="fill-form" hidden>
+            <label for="fill-input">填写完整单词</label>
+            <input
+              id="fill-input"
+              class="fill-input"
+              type="text"
+              lang="fr"
+              autocomplete="off"
+              autocorrect="off"
+              autocapitalize="none"
+              spellcheck="false"
+              placeholder="在这里输入法语单词"
+            />
+            <div id="accent-buttons" class="accent-buttons" aria-label="重音符号快捷按钮"></div>
+            <button id="fill-submit" class="primary-button" type="submit">检查答案</button>
+          </form>
+
           <div id="feedback" class="feedback" aria-live="assertive"></div>
 
           <button id="next-button" class="primary-button next-button" type="button" hidden>
-            下一题
+            下一步
             <span aria-hidden="true">→</span>
           </button>
         </div>
 
         <div id="screen-result" class="screen" hidden>
           <div class="result-content">
-            <span class="eyebrow">练习完成</span>
-            <h1>这一轮结束啦</h1>
+            <span class="eyebrow">本组完成</span>
+            <h1 id="result-title">学习完成啦</h1>
             <div class="score-circle">
               <strong id="result-score">0</strong>
-              <span>/ 20</span>
+              <span>/ <span id="result-total">10</span></span>
             </div>
             <p id="result-message" class="result-message"></p>
             <p id="result-summary" class="result-summary"></p>
             <div class="result-actions">
               <button id="restart-button" class="primary-button" type="button">
-                再练一轮
-                <span aria-hidden="true">↻</span>
+                再学 10 个
+                <span aria-hidden="true">＋</span>
               </button>
               <button id="home-button" class="secondary-button" type="button">
                 返回首页
@@ -95,11 +133,21 @@
             </div>
           </div>
         </div>
+
+        <div id="screen-empty" class="screen" hidden>
+          <div class="result-content">
+            <span class="eyebrow">复习单词</span>
+            <h1>昨天没有学习单词</h1>
+            <p id="empty-message" class="result-message">先完成今天的新单词学习，明天就可以在这里复习了。</p>
+            <button id="empty-home-button" class="primary-button" type="button">返回首页</button>
+          </div>
+        </div>
       </section>
 
-      <footer class="footer-note">每轮 20 题 · 从 10,000 个 A2–B2 常用词汇中随机抽取</footer>
+      <footer class="footer-note">每天 10 个 B2 新单词 · 学习进度保存在本机</footer>
     </main>
 
+    <script src="sentences.js"></script>
     <script src="data.js"></script>
     <script src="app.js"></script>
   </body>
