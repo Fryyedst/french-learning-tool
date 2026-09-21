@@ -907,8 +907,10 @@ body[data-screen="start"] .screen {
   gap: 12px;
 }
 
-.options[hidden],\n.fill-form[hidden],
+.options[hidden],
+.fill-form[hidden],
 #choice-prompt[hidden],
+#sentence-prompt[hidden],
 #fill-prompt[hidden] {
   display: none;
 }
